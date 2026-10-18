@@ -1,7 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
 
-
 CATALOG_ENDPOINT = "https://catalog.unc.edu/courses/"
 
 
@@ -24,11 +23,5 @@ def extract_course_tags() -> list[str]:
     for course in courses:
         start = course.index("(")
         end = course.index(")", start + 1)
-        course_tags.append(course[start + 1: end])
+        course_tags.append(course[start + 1 : end])
     return course_tags
-
-
-
-
-
-

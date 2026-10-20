@@ -1,8 +1,8 @@
 import requests
 from bs4 import BeautifulSoup
 
-
 CATALOG_ENDPOINT = "https://catalog.unc.edu/courses/"
+CODE_LENGTH = 5
 
 
 def _fetch_html(url: str) -> str:
@@ -13,22 +13,48 @@ def _fetch_html(url: str) -> str:
     return response
 
 
-def extract_course_tags() -> list[str]:
-    """Return course tags from UNC Course Catalog"""
+def extract_subject_tags() -> list[str]:
+    """Return subject tags as a list from UNC Catalog"""
     html = _fetch_html(CATALOG_ENDPOINT)
     soup = BeautifulSoup(html, "html.parser")
-    courses = soup.select("#atozindex li")
-    courses = [course.get_text() for course in courses]
+    subjects = soup.select("#atozindex li")
+    subjects = [subject.get_text() for subject in subjects]
 
-    course_tags = []
-    for course in courses:
-        start = course.index("(")
-        end = course.index(")", start + 1)
-        course_tags.append(course[start + 1: end])
-    return course_tags
-
-
+    subject_tags = []
+    for subject in subjects:
+        start = subject.index("(")
+        end = subject.index(")", start + 1)
+        subject_tags.append(subject[start + 1 : end])
+    return subject_tags
 
 
+def extract_subjects() -> list[dict]:
+    """Return subject title and tags as a json from UNC Catalog
 
+    Format: [{"code": ..., "name": ...}]
+    """
+    html = _fetch_html(CATALOG_ENDPOINT)
+    soup = BeautifulSoup(html, "html.parser")
+    subjects = soup.select("#atozindex li")
+    subjects = [subject.get_text() for subject in subjects]
 
+    json = []
+
+    for subject in subjects:
+        start_code = subject.index("(")
+        end_code = subject.index(")", start_code + 1)
+
+        # If the text between () is too long to be a code, the real code is in the next ()
+        # e.g. PHARMACY (NON-DEPARTMENTAL) (PHCY)
+        if (end_code - start_code) > CODE_LENGTH:
+            start_code = subject.index("(", start_code + 1)
+            end_code = subject.index(")", end_code + 1)
+
+        subject_tag = subject[start_code + 1 : end_code]
+
+        end_name = start_code - 1
+        subject_name = subject[0:end_name]
+
+        field = {"code": subject_tag, "name": subject_name}
+        json.append(field)
+    return json

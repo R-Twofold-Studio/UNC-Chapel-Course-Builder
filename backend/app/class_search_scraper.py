@@ -1,30 +1,28 @@
 import json
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import requests
 from bs4 import BeautifulSoup
-
 
 CLASS_SEARCH_ENDPOINT = "https://reports.unc.edu/class-search/"
 
 
 def _fetch_class_html(course_tag: str):
-    """Return the filtered response to a specific course from HTTP request to UNC Class Search endpoint"""
+    """Return the UNC Class Search results HTML for a specific course."""
     session = requests.Session()
 
     response = session.get(CLASS_SEARCH_ENDPOINT)
     soup = BeautifulSoup(response.text, "html.parser")
-    token = soup.select_one(
-    'input[name="csrfmiddlewaretoken"]'
-    )["value"]
+    token = soup.select_one('input[name="csrfmiddlewaretoken"]')["value"]
     response = session.post(
-        CLASS_SEARCH_ENDPOINT, 
+        CLASS_SEARCH_ENDPOINT,
         data={
             "csrfmiddlewaretoken": token,
             "subject": course_tag,
             "term": "2027 Spring",
-        })
+        },
+    )
     response.raise_for_status()
     response = response.text
     return response
@@ -32,8 +30,16 @@ def _fetch_class_html(course_tag: str):
 
 # Day codes used in the Schedule column (e.g. "MWF", "TTH", "MTWTHF").
 # Two-letter codes are listed first so "TH" isn't read as "T" + "H".
-_DAY_CODES = [("TH", "TH"), ("SA", "SA"), ("SU", "SU"),
-              ("M", "MO"), ("T", "TU"), ("W", "WE"), ("F", "FR"), ("S", "SA")]
+_DAY_CODES = [
+    ("TH", "TH"),
+    ("SA", "SA"),
+    ("SU", "SU"),
+    ("M", "MO"),
+    ("T", "TU"),
+    ("W", "WE"),
+    ("F", "FR"),
+    ("S", "SA"),
+]
 
 
 def _clean(text: str) -> str | None:
@@ -43,7 +49,9 @@ def _clean(text: str) -> str | None:
 
 
 def _to_24h(t: str) -> str:
+    """Convert a 12-hour time string to 24-hour format."""
     return datetime.strptime(t.strip(), "%I:%M %p").strftime("%H:%M")
+
 
 def _to_iso_date(d: str) -> str:
     return datetime.strptime(d.strip(), "%m/%d/%Y").strftime("%Y-%m-%d")
@@ -66,8 +74,14 @@ def _parse_meeting(dates: str | None, schedule: str | None) -> list[dict]:
     """'01/06/2027 - 05/06/2027' + 'MWF 09:05 AM-09:55 AM' -> meeting dict."""
     if not dates and not schedule:
         return []
-    meeting = {"days": [], "start_time": None, "end_time": None,
-               "start_date": None, "end_date": None, "location": None}
+    meeting = {
+        "days": [],
+        "start_time": None,
+        "end_time": None,
+        "start_date": None,
+        "end_date": None,
+        "location": None,
+    }
     if dates and " - " in dates:
         start, end = dates.split(" - ", 1)
         meeting["start_date"], meeting["end_date"] = _to_iso_date(start), _to_iso_date(end)
@@ -80,18 +94,19 @@ def _parse_meeting(dates: str | None, schedule: str | None) -> list[dict]:
     return [meeting]
 
 
-def _parse_credits(hours: str | None):
-    if not hours:
+def _parse_credits(credit_hours: str | None):
+    """Converts single credit hours into float and ranges as-is"""
+    if not credit_hours:
         return None
     try:
-        value = float(hours)
+        value = float(credit_hours)
     except ValueError:
-        return hours  # e.g. a range like "1.0-3.0"; keep as-is
+        return credit_hours  # e.g. a range like "1.0-3.0"; keep as-is
     return int(value) if value.is_integer() else value
 
 
 def _format_term(term: str | None) -> str | None:
-    """'2027 Spring' -> 'Spring 2027'."""
+    """Reformats from year-semester '2027 Spring' to semester-year 'Spring 2027'."""
     if not term:
         return None
     parts = term.split()
@@ -127,8 +142,18 @@ def extract_class_data_as_json(course_tag: str) -> str:
         if len(cells) >= 11:
             catalog_number = cells[-11].get_text(strip=True)
 
-        (same_as_td, section_td, class_num_td, title_td, term_td, hours_td,
-         dates_td, schedule_td, mode_td, seats_td) = cells[-10:]
+        (
+            same_as_td,
+            section_td,
+            class_num_td,
+            title_td,
+            term_td,
+            hours_td,
+            dates_td,
+            schedule_td,
+            mode_td,
+            seats_td,
+        ) = cells[-10:]
 
         same_as_text = _clean(same_as_td.get_text())
         same_as = [s.strip() for s in same_as_text.split(",")] if same_as_text else []
@@ -142,25 +167,28 @@ def extract_class_data_as_json(course_tag: str) -> str:
         except ValueError:
             seats = None
 
-        sections.append({
-            "subject": subject,
-            "catalog_number": catalog_number,
-            "title": _clean(title_td.get_text()),
-            "section": _clean(section_td.get_text()),
-            "class_number": _clean(class_num_td.get_text()),
-            "component": None,
-            "credits": _parse_credits(_clean(hours_td.get_text())),
-            "same_as": same_as,
-            "instruction_mode": _clean(mode_td.get_text()),
-            "instructors": [],
-            "available_seats": seats,
-            "meetings": _parse_meeting(_clean(dates_td.get_text()),
-                                       _clean(schedule_td.get_text())),
-        })
+        sections.append(
+            {
+                "subject": subject,
+                "catalog_number": catalog_number,
+                "title": _clean(title_td.get_text()),
+                "section": _clean(section_td.get_text()),
+                "class_number": _clean(class_num_td.get_text()),
+                "component": None,
+                "credits": _parse_credits(_clean(hours_td.get_text())),
+                "same_as": same_as,
+                "instruction_mode": _clean(mode_td.get_text()),
+                "instructors": [],
+                "available_seats": seats,
+                "meetings": _parse_meeting(
+                    _clean(dates_td.get_text()), _clean(schedule_td.get_text())
+                ),
+            }
+        )
 
     result = {
         "term": term,
-        "fetched_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "fetched_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "sections": sections,
     }
     return json.dumps(result, indent=2)

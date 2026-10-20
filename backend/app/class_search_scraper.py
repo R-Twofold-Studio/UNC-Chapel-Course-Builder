@@ -49,6 +49,7 @@ def _clean(text: str) -> str | None:
 
 
 def _to_24h(t: str) -> str:
+    """Convert a 12-hour time string to 24-hour format."""
     return datetime.strptime(t.strip(), "%I:%M %p").strftime("%H:%M")
 
 
@@ -93,18 +94,19 @@ def _parse_meeting(dates: str | None, schedule: str | None) -> list[dict]:
     return [meeting]
 
 
-def _parse_credits(hours: str | None):
-    if not hours:
+def _parse_credits(credit_hours: str | None):
+    """Converts single credit hours into float and ranges as-is"""
+    if not credit_hours:
         return None
     try:
-        value = float(hours)
+        value = float(credit_hours)
     except ValueError:
-        return hours  # e.g. a range like "1.0-3.0"; keep as-is
+        return credit_hours  # e.g. a range like "1.0-3.0"; keep as-is
     return int(value) if value.is_integer() else value
 
 
 def _format_term(term: str | None) -> str | None:
-    """'2027 Spring' -> 'Spring 2027'."""
+    """Reformats from year-semester '2027 Spring' to semester-year 'Spring 2027'."""
     if not term:
         return None
     parts = term.split()

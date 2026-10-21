@@ -5,18 +5,18 @@ from datetime import UTC, datetime
 import requests
 from bs4 import BeautifulSoup
 
-CLASS_SEARCH_ENDPOINT = "https://reports.unc.edu/class-search/"
+CLASS_SEARCH_URL = "https://reports.unc.edu/class-search/"
 
 
 def _fetch_class_html(course_tag: str):
     """Return the UNC Class Search results HTML for a specific course."""
     session = requests.Session()
 
-    response = session.get(CLASS_SEARCH_ENDPOINT)
+    response = session.get(CLASS_SEARCH_URL)
     soup = BeautifulSoup(response.text, "html.parser")
     token = soup.select_one('input[name="csrfmiddlewaretoken"]')["value"]
     response = session.post(
-        CLASS_SEARCH_ENDPOINT,
+        CLASS_SEARCH_URL,
         data={
             "csrfmiddlewaretoken": token,
             "subject": course_tag,
@@ -113,7 +113,7 @@ def _format_term(term: str | None) -> str | None:
     return f"{parts[1]} {parts[0]}" if len(parts) == 2 and parts[0].isdigit() else term
 
 
-def extract_class_data_as_json(course_tag: str) -> str:
+def extract_section_data(course_tag: str) -> str:
     """Parse the class-search results page into a JSON string.
 
     The results table uses rowspan for Subject and Catalog Number, so a row has
@@ -192,3 +192,7 @@ def extract_class_data_as_json(course_tag: str) -> str:
         "sections": sections,
     }
     return json.dumps(result, indent=2)
+
+
+if __name__ == "__main__":
+    print(extract_section_data("COMP"))

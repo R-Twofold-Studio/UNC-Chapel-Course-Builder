@@ -15,12 +15,12 @@ CATALOG_URL = "https://catalog.unc.edu/courses/"
 _COURSE_CODE_RE = re.compile(r"^([A-Za-z]{2,5})\s*(\d+[A-Za-z]*)\.?$")
 
 
-def _normalize_subject_code(code: str) -> str:
+def normalize_subject_code(code: str) -> str:
     """Return a subject code with surrounding whitespace (including NBSP) removed."""
     return code.strip().upper()
 
 
-def _normalize_catalog_number(catalog_number: str) -> str:
+def normalize_catalog_number(catalog_number: str) -> str:
     """Return a catalog number without surrounding whitespace or a trailing period.
 
     Suffixes that are part of the number ("101L", "89H", "590H") are preserved.
@@ -28,13 +28,13 @@ def _normalize_catalog_number(catalog_number: str) -> str:
     return catalog_number.strip().removesuffix(".").strip()
 
 
-def _parse_course_code(course_code: str) -> tuple[str, str]:
+def parse_course_code(course_code: str) -> tuple[str, str]:
     """Split a catalog course code such as "BCB\xa0501." into ("BCB", "501")."""
     match = _COURSE_CODE_RE.match(course_code.strip())
     if match is None:
         raise ValueError(f"Unrecognized course code: {course_code!r}")
     subject, catalog_number = match.groups()
-    return _normalize_subject_code(subject), _normalize_catalog_number(catalog_number)
+    return normalize_subject_code(subject), normalize_catalog_number(catalog_number)
 
 
 def _fetch_html(url: str, endpoint: str = "") -> str:
@@ -55,7 +55,7 @@ def extract_subject_tags() -> list[str]:
         text = subject.get_text().strip()
         start = text.rindex("(")
         end = text.rindex(")")
-        subject_tags.append(_normalize_subject_code(text[start + 1 : end]))
+        subject_tags.append(normalize_subject_code(text[start + 1 : end]))
 
     return subject_tags
 
@@ -73,7 +73,7 @@ def extract_subjects() -> list[dict[str, str]]:
         start_code = text.rindex("(")
         end_code = text.rindex(")")
 
-        subject_tag = _normalize_subject_code(text[start_code + 1 : end_code])
+        subject_tag = normalize_subject_code(text[start_code + 1 : end_code])
         subject_name = " ".join(text[:start_code].split())
 
         records.append({"code": subject_tag, "name": subject_name})
@@ -135,7 +135,7 @@ def extract_courses(course_tag: str = None) -> list[dict]:
         course_code = course.select_one(".detail-code strong").get_text()
 
         try:
-            subject, catalog_number = _parse_course_code(course_code)
+            subject, catalog_number = parse_course_code(course_code)
         except ValueError:
             logger.warning("Skipping course with unparseable code %r", course_code)
             continue
